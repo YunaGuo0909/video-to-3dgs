@@ -1,0 +1,6 @@
+results/
+data/
+.venv/
+.uv-cache/
+gsplat-repo/
+__pycache__/
