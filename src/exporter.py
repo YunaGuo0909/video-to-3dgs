@@ -35,18 +35,24 @@ def export_ply(ckpt_path: Path, output_path: Path) -> None:
     opacity_act = 1.0 / (1.0 + np.exp(-opacities))
     scale_act = np.exp(scales)
     max_scale = scale_act.max(axis=1)
+    min_scale = scale_act.min(axis=1)
+    anisotropy = max_scale / np.clip(min_scale, 1e-8, None)
 
-    # Position filter: keep Gaussians within 3 std of median
+    # Position filter: IQR-based robust outlier removal
     median_pos = np.median(means, axis=0)
     dists = np.linalg.norm(means - median_pos, axis=1)
-    dist_thresh = np.percentile(dists, 99)  # drop outermost 1%
+    q75 = np.percentile(dists, 75)
+    q25 = np.percentile(dists, 25)
+    iqr = q75 - q25
+    dist_thresh = q75 + 3.0 * iqr  # robust outlier fence
 
     mask = (
         (dists < dist_thresh)
-        & (opacity_act > 0.05)
-        & (max_scale < 10.0)
+        & (opacity_act > 0.1)
+        & (max_scale < 1.0)
+        & (anisotropy < 20.0)
     )
-    logger.info("Filtering: %d / %d kept (dist<%.1f, opa>0.05, scale<10)",
+    logger.info("Filtering: %d / %d kept (dist<%.2f, opa>0.1, scale<1, aniso<20)",
                 mask.sum(), len(means), dist_thresh)
 
     means = means[mask]
