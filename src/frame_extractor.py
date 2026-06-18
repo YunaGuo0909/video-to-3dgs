@@ -42,15 +42,20 @@ class FrameExtractor:
         Laplacian variance below this → frame discarded as blurry.
     min_frame_gap_ms : float
         Minimum milliseconds between consecutive accepted frames.
+    max_frames : int | None
+        Hard cap on accepted frames. Computed automatically from video
+        duration if None: ~80 frames/min, clamped to [300, 800].
     """
 
     def __init__(
         self,
         blur_threshold: float = 80.0,
         min_frame_gap_ms: float = 250.0,
+        max_frames: int | None = None,
     ) -> None:
         self.blur_threshold = blur_threshold
         self.min_frame_gap_ms = min_frame_gap_ms
+        self.max_frames = max_frames
 
     @classmethod
     def from_video(cls, video_path: Path | str) -> "FrameExtractor":
@@ -66,11 +71,26 @@ class FrameExtractor:
         else:
             gap = 300.0
 
+        # Compute max frames from video duration: ~80 frames per minute, min 300.
+        duration_min = scan["duration_sec"] / 60.0
+        max_frames = max(300, int(duration_min * 80))
+        if max_frames > 2000:
+            logger.warning(
+                "Estimated %d frames for a %.0f-min video. "
+                "COLMAP will be slow; consider a shorter clip.",
+                max_frames, duration_min,
+            )
+
         logger.info(
-            "Adaptive: blur_thresh=%.1f  gap_ms=%.0f  (motion=%.1f)",
-            blur_threshold, gap, motion,
+            "Adaptive: blur_thresh=%.1f  gap_ms=%.0f  (motion=%.1f)  "
+            "max_frames=%d  (%.0fs video)",
+            blur_threshold, gap, motion, max_frames, scan["duration_sec"],
         )
-        return cls(blur_threshold=blur_threshold, min_frame_gap_ms=gap)
+        return cls(
+            blur_threshold=blur_threshold,
+            min_frame_gap_ms=gap,
+            max_frames=max_frames,
+        )
 
     def extract(self, video_path: Path | str, output_dir: Path | str) -> ExtractionStats:
         """Extract frames from video into output_dir/frame_XXXXXX.jpg."""
@@ -112,6 +132,10 @@ class FrameExtractor:
                 stats.accepted += 1
                 pbar.update(1)
 
+                if self.max_frames and stats.accepted >= self.max_frames:
+                    logger.info("Reached max_frames=%d, stopping.", self.max_frames)
+                    break
+
         cap.release()
         logger.info(stats.summary())
         return stats
@@ -124,6 +148,8 @@ class FrameExtractor:
             raise RuntimeError(f"Cannot open: {video_path}")
 
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        duration_sec = total / fps
         indices = np.linspace(0, total - 1, min(n_samples, total), dtype=int)
 
         sharpness: list[float] = []
@@ -156,4 +182,5 @@ class FrameExtractor:
         return {
             "sharpness_p25": float(np.percentile(sh, 25)),
             "motion_mean": float(np.mean(mo)),
+            "duration_sec": duration_sec,
         }
