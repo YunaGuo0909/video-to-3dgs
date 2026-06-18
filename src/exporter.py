@@ -58,11 +58,12 @@ def export_ply(ckpt_path: Path, output_path: Path) -> None:
     v["f_dc_0"], v["f_dc_1"], v["f_dc_2"] = dc[:, 0], dc[:, 1], dc[:, 2]
 
     if shN is not None:
-        rest = shN.reshape(N, -1, 3)
-        for i in range(rest.shape[1]):
-            v[f"f_rest_{i * 3}"] = rest[:, i, 0]
-            v[f"f_rest_{i * 3 + 1}"] = rest[:, i, 1]
-            v[f"f_rest_{i * 3 + 2}"] = rest[:, i, 2]
+        # Standard 3DGS PLY: channel-first order (all R, all G, all B)
+        # shN shape: (N, K, 3) where K = num_sh_bases - 1
+        K = shN.shape[1]
+        rest_flat = shN.reshape(N, K, 3).transpose(0, 2, 1).reshape(N, -1)  # (N, 3*K)
+        for i in range(rest_flat.shape[1]):
+            v[f"f_rest_{i}"] = rest_flat[:, i]
 
     v["opacity"] = opacities
     v["scale_0"], v["scale_1"], v["scale_2"] = scales[:, 0], scales[:, 1], scales[:, 2]
