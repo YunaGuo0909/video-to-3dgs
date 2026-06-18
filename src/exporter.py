@@ -31,6 +31,32 @@ def export_ply(ckpt_path: Path, output_path: Path) -> None:
     if shN is not None:
         shN = shN.numpy()                                  # (N, K, 3)
 
+    # Filter outlier Gaussians (MCMC produces floaters far from scene)
+    opacity_act = 1.0 / (1.0 + np.exp(-opacities))
+    scale_act = np.exp(scales)
+    max_scale = scale_act.max(axis=1)
+
+    # Position filter: keep Gaussians within 3 std of median
+    median_pos = np.median(means, axis=0)
+    dists = np.linalg.norm(means - median_pos, axis=1)
+    dist_thresh = np.percentile(dists, 99)  # drop outermost 1%
+
+    mask = (
+        (dists < dist_thresh)
+        & (opacity_act > 0.05)
+        & (max_scale < 10.0)
+    )
+    logger.info("Filtering: %d / %d kept (dist<%.1f, opa>0.05, scale<10)",
+                mask.sum(), len(means), dist_thresh)
+
+    means = means[mask]
+    scales = scales[mask]
+    quats = quats[mask]
+    opacities = opacities[mask]
+    sh0 = sh0[mask]
+    if shN is not None:
+        shN = shN[mask]
+
     # Normalize quaternions
     quat_norms = np.linalg.norm(quats, axis=1, keepdims=True)
     quats = quats / np.clip(quat_norms, 1e-8, None)
