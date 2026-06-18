@@ -288,9 +288,12 @@ class GaussianTrainer:
             "shN": torch.optim.Adam([splats["shN"]], lr=cfg.lr_shN, eps=1e-15),
         }
 
-        # MCMC strategy
+        # MCMC strategy (API varies across gsplat versions)
         strategy = MCMCStrategy(cap_max=cfg.cap_max)
-        strategy_state = strategy.initialize_state(scene_scale=scene_scale)
+        try:
+            strategy_state = strategy.initialize_state(scene_scale=scene_scale)
+        except TypeError:
+            strategy_state = strategy.initialize_state()
 
         # Checkpoint dir
         ckpt_dir = result_dir / "ckpts"
