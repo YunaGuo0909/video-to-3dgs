@@ -24,13 +24,34 @@ def export_ply(ckpt_path: Path, output_path: Path) -> None:
     splats = ckpt["splats"]
 
     means = splats["means"].numpy()
-    scales = splats["scales"].numpy()
+    scales = splats["scales"].numpy()          # log-space
     quats = splats["quats"].numpy()
-    opacities = splats["opacities"].numpy().reshape(-1)
+    opacities = splats["opacities"].numpy().reshape(-1)  # logit-space
     sh0 = splats["sh0"].numpy()
     shN = splats.get("shN")
     if shN is not None:
         shN = shN.numpy()
+
+    # Filter out low-opacity and extreme-scale Gaussians that cause needle artifacts
+    opacity_activated = 1.0 / (1.0 + np.exp(-opacities))  # sigmoid
+    scale_activated = np.exp(scales)                        # actual scale
+    max_scale_per_gauss = scale_activated.max(axis=1)
+
+    mask = (opacity_activated > 0.05) & (max_scale_per_gauss < 1.0)
+    logger.info("Filtering: %d / %d Gaussians kept (opacity>0.05, max_scale<1.0)",
+                mask.sum(), len(means))
+
+    means = means[mask]
+    scales = scales[mask]
+    quats = quats[mask]
+    opacities = opacities[mask]
+    sh0 = sh0[mask]
+    if shN is not None:
+        shN = shN[mask]
+
+    # Normalize quaternions
+    quat_norms = np.linalg.norm(quats, axis=1, keepdims=True)
+    quats = quats / np.clip(quat_norms, 1e-8, None)
 
     N = len(means)
 
