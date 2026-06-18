@@ -278,20 +278,14 @@ class GaussianTrainer:
             "shN": torch.nn.Parameter(shN),
         })
 
-        # Optimisers
-        try:
-            from gsplat.optimizers import SelectiveAdam
-            OptimizerClass = SelectiveAdam
-        except ImportError:
-            OptimizerClass = torch.optim.Adam
-
+        # Optimisers (Adam; SelectiveAdam API varies across gsplat versions)
         optimizers = {
-            "means": OptimizerClass([splats["means"]], lr=cfg.lr_means, eps=1e-15),
-            "scales": OptimizerClass([splats["scales"]], lr=cfg.lr_scales, eps=1e-15),
-            "quats": OptimizerClass([splats["quats"]], lr=cfg.lr_quats, eps=1e-15),
-            "opacities": OptimizerClass([splats["opacities"]], lr=cfg.lr_opacities, eps=1e-15),
-            "sh0": OptimizerClass([splats["sh0"]], lr=cfg.lr_sh0, eps=1e-15),
-            "shN": OptimizerClass([splats["shN"]], lr=cfg.lr_shN, eps=1e-15),
+            "means": torch.optim.Adam([splats["means"]], lr=cfg.lr_means, eps=1e-15),
+            "scales": torch.optim.Adam([splats["scales"]], lr=cfg.lr_scales, eps=1e-15),
+            "quats": torch.optim.Adam([splats["quats"]], lr=cfg.lr_quats, eps=1e-15),
+            "opacities": torch.optim.Adam([splats["opacities"]], lr=cfg.lr_opacities, eps=1e-15),
+            "sh0": torch.optim.Adam([splats["sh0"]], lr=cfg.lr_sh0, eps=1e-15),
+            "shN": torch.optim.Adam([splats["shN"]], lr=cfg.lr_shN, eps=1e-15),
         }
 
         # MCMC strategy
