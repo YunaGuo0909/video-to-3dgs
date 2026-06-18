@@ -32,13 +32,19 @@ def export_ply(ckpt_path: Path, output_path: Path) -> None:
     if shN is not None:
         shN = shN.numpy()
 
-    # Filter out low-opacity and extreme-scale Gaussians that cause needle artifacts
+    # Filter out problematic Gaussians that cause artifacts in PLY viewers
     opacity_activated = 1.0 / (1.0 + np.exp(-opacities))  # sigmoid
     scale_activated = np.exp(scales)                        # actual scale
-    max_scale_per_gauss = scale_activated.max(axis=1)
+    max_scale = scale_activated.max(axis=1)
+    min_scale = scale_activated.min(axis=1)
+    anisotropy = max_scale / np.clip(min_scale, 1e-8, None)
 
-    mask = (opacity_activated > 0.05) & (max_scale_per_gauss < 1.0)
-    logger.info("Filtering: %d / %d Gaussians kept (opacity>0.05, max_scale<1.0)",
+    mask = (
+        (opacity_activated > 0.1)       # remove near-transparent
+        & (max_scale < 0.5)             # remove oversized blobs
+        & (anisotropy < 30.0)           # remove needle-shaped Gaussians
+    )
+    logger.info("Filtering: %d / %d Gaussians kept (opacity>0.1, max_scale<0.5, aniso<30)",
                 mask.sum(), len(means))
 
     means = means[mask]
