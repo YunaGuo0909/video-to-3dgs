@@ -1,6 +1,13 @@
-results/
-data/
+*.pyc
+__pycache__/
 .venv/
 .uv-cache/
+*.egg-info/
+
+# Large generated files (not tracked in git)
+results/
+data/
 gsplat-repo/
-__pycache__/
+*.ply
+*.mp4
+*.pt
