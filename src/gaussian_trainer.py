@@ -348,11 +348,18 @@ class GaussianTrainer:
 
             loss.backward()
 
-            # MCMC post-backward
-            strategy.step_post_backward(
-                params=splats, optimizers=optimizers,
-                state=strategy_state, step=step, info=info,
-            )
+            # MCMC post-backward (gsplat 1.5.x requires lr argument)
+            try:
+                strategy.step_post_backward(
+                    params=splats, optimizers=optimizers,
+                    state=strategy_state, step=step, info=info,
+                    lr=cfg.lr_means,
+                )
+            except TypeError:
+                strategy.step_post_backward(
+                    params=splats, optimizers=optimizers,
+                    state=strategy_state, step=step, info=info,
+                )
 
             # Optimiser step
             for opt in optimizers.values():
