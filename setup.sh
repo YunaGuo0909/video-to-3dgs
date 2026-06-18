@@ -1,49 +1,49 @@
 #!/bin/bash
 # Setup script for video-to-3dgs.
-# Installs all dependencies with correct versions to avoid conflicts.
+# Uses uv for fast, reproducible dependency management.
 #
 # Usage:
-#   bash setup.sh                     # auto-detect CUDA
-#   bash setup.sh --cuda 12.4         # specify CUDA version
-#   bash setup.sh --venv /path/.venv  # custom venv location
+#   bash setup.sh                          # auto-detect everything
+#   bash setup.sh --cuda 12.4              # specify CUDA version
+#   bash setup.sh --venv /transfer/.venv   # custom venv location (for disk quota)
+#   bash setup.sh --cache /transfer/.cache # custom uv cache (for disk quota)
 
 set -e
 
 CUDA_VERSION=""
 VENV_DIR=".venv"
+CACHE_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --cuda) CUDA_VERSION="$2"; shift 2 ;;
-        --venv) VENV_DIR="$2"; shift 2 ;;
+        --cuda)  CUDA_VERSION="$2"; shift 2 ;;
+        --venv)  VENV_DIR="$2"; shift 2 ;;
+        --cache) CACHE_DIR="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
+# Export cache dir if specified (avoids home disk quota issues)
+if [ -n "$CACHE_DIR" ]; then
+    export UV_CACHE_DIR="$CACHE_DIR"
+    echo "UV cache: $CACHE_DIR"
+fi
+
 echo "=== video-to-3dgs setup ==="
 
-# Check Python version
-PYTHON=${PYTHON:-python3}
-PY_VERSION=$($PYTHON -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PY_MAJOR=$($PYTHON -c "import sys; print(sys.version_info.major)")
-PY_MINOR=$($PYTHON -c "import sys; print(sys.version_info.minor)")
-
-if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); then
-    echo "ERROR: Python >= 3.10 required (found $PY_VERSION)"
-    exit 1
+# ── Check uv ─────────────────────────────────────────────────────────────────
+if ! command -v uv &>/dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
 fi
-if [ "$PY_MINOR" -gt 12 ]; then
-    echo "WARNING: Python $PY_VERSION detected. PyTorch+CUDA wheels may not be available."
-    echo "         Recommended: Python 3.10-3.12"
-fi
-echo "Python: $PY_VERSION"
+echo "uv: $(uv --version)"
 
-# Detect CUDA if not specified
+# ── Detect CUDA ──────────────────────────────────────────────────────────────
 if [ -z "$CUDA_VERSION" ]; then
     if command -v nvidia-smi &>/dev/null; then
-        DRIVER_CUDA=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
-        echo "NVIDIA driver: $DRIVER_CUDA"
-        # Default to cu124 (widely compatible)
+        DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
+        echo "NVIDIA driver: $DRIVER"
         CUDA_VERSION="12.4"
     else
         echo "No NVIDIA GPU detected. Installing CPU-only torch."
@@ -52,35 +52,35 @@ if [ -z "$CUDA_VERSION" ]; then
 fi
 echo "CUDA target: $CUDA_VERSION"
 
-# Create venv
-if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating virtual environment at $VENV_DIR ..."
-    $PYTHON -m venv "$VENV_DIR"
-fi
-source "$VENV_DIR/bin/activate"
-pip install --upgrade pip
+# ── Create venv with Python 3.10-3.12 ────────────────────────────────────────
+# Python 3.13+ lacks PyTorch CUDA wheels; force 3.10 for maximum compatibility.
+echo "Creating venv at $VENV_DIR (Python 3.10)..."
+uv venv "$VENV_DIR" --python 3.10 2>/dev/null || uv venv "$VENV_DIR" --python 3.11 2>/dev/null || uv venv "$VENV_DIR" --python 3.12 2>/dev/null || uv venv "$VENV_DIR"
+echo "Python: $("$VENV_DIR/bin/python" --version)"
 
-# Install PyTorch with correct CUDA
+# ── Install PyTorch with correct CUDA ─────────────────────────────────────────
 if [ "$CUDA_VERSION" = "cpu" ]; then
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    echo "Installing PyTorch (CPU)..."
+    uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 else
     CUDA_TAG="cu$(echo $CUDA_VERSION | tr -d '.')"
-    echo "Installing PyTorch with $CUDA_TAG ..."
-    pip install torch torchvision --index-url "https://download.pytorch.org/whl/$CUDA_TAG"
+    echo "Installing PyTorch + CUDA $CUDA_VERSION ($CUDA_TAG)..."
+    uv pip install torch torchvision --index-url "https://download.pytorch.org/whl/$CUDA_TAG"
 fi
 
-# Install gsplat (needs torch installed first for CUDA extension compilation)
-pip install "gsplat>=1.0"
+# ── Install gsplat (needs torch for CUDA kernels) ────────────────────────────
+echo "Installing gsplat..."
+uv pip install "gsplat>=1.0"
 
-# Install remaining dependencies
-pip install \
-    numpy opencv-python Pillow plyfile pycolmap scipy scikit-learn \
-    torchmetrics[image] tqdm "imageio[ffmpeg]"
+# ── Install remaining deps ───────────────────────────────────────────────────
+echo "Installing dependencies..."
+uv pip install numpy opencv-python Pillow plyfile pycolmap scipy scikit-learn \
+    "torchmetrics[image]" tqdm "imageio[ffmpeg]"
 
-# Verify installation
+# ── Verify ───────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Verifying installation ==="
-python -c "
+"$VENV_DIR/bin/python" -c "
 import torch
 print(f'  PyTorch:  {torch.__version__}')
 print(f'  CUDA:     {torch.cuda.is_available()} ({torch.version.cuda})')
@@ -92,5 +92,5 @@ import cv2
 print(f'  OpenCV:   {cv2.__version__}')
 print()
 print('Setup complete! Run:')
-print('  python run.py --video room.mp4 --output results/')
+print(f'  {\"$VENV_DIR\"}/bin/python run.py --video room.mp4 --output results/')
 "
