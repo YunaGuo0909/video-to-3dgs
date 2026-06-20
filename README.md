@@ -10,9 +10,9 @@ python run.py --video room.mp4 --output results/
 
 ## Results
 
-https://github.com/user-attachments/assets/placeholder-flythrough-video
+![Fly-through of reconstructed 3D scene](docs/assets/flythrough.gif)
 
-> *Fly-through video rendered from trained 3D Gaussians. See `docs/assets/flythrough.mp4` for the full video.*
+> *Fly-through rendered from trained 3D Gaussians.*
 
 The output `point_cloud.ply` can be opened in [SuperSplat](https://playcanvas.com/supersplat/editor), [antimatter15 viewer](https://antimatter15.com/splat/), or any 3DGS-compatible tool. A fly-through video (`flythrough.mp4`) is also generated automatically.
 
