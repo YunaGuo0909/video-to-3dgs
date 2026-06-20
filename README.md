@@ -8,13 +8,11 @@ One command takes a video in, produces a viewable 3D Gaussian Splat out:
 python run.py --video room.mp4 --output results/
 ```
 
-https://github.com/user-attachments/assets/placeholder-flythrough-video
-
 ## Results
 
-| Input frame | Rendered view | 3D point cloud |
-|:-:|:-:|:-:|
-| ![input](docs/assets/input_frame.jpg) | ![render](docs/assets/rendered_view.jpg) | ![pointcloud](docs/assets/pointcloud.jpg) |
+https://github.com/user-attachments/assets/placeholder-flythrough-video
+
+> *Fly-through video rendered from trained 3D Gaussians. See `docs/assets/flythrough.mp4` for the full video.*
 
 The output `point_cloud.ply` can be opened in [SuperSplat](https://playcanvas.com/supersplat/editor), [antimatter15 viewer](https://antimatter15.com/splat/), or any 3DGS-compatible tool. A fly-through video (`flythrough.mp4`) is also generated automatically.
 
